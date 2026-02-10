@@ -1,38 +1,29 @@
 # === Makefile.linux ===
 
-CC = gcc
-CFLAGS = -O0 -mavx2 -std=gnu17
-INCLUDES = -Isrc
-LDFLAGS = -lm
-SRC_DIR = src
-BUILD_DIR = build
-TARGET = $(BUILD_DIR)/Main
+CC = x86_64-elf-gcc
+AS = nasm
+LD = x86_64-elf-ld
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
+CFLAGS = -ffreestanding -O2 -Wall -Wextra -mno-red-zone
+LDFLAGS = -T linker.ld
 
-all: $(BUILD_DIR) $(TARGET)
+all: kernel.bin iso
 
-alldebug:
-	$(CC) -g $(CFLAGS) $(INCLUDES) ./$(SRC_DIR)/Main.c -o ./$(TARGET) $(LDFLAGS) 
+kernel.bin:
+	$(AS) -f elf64 boot/boot.asm -o boot.o
+	$(CC) $(CFLAGS) -c kernel/kernel.c -o kernel.o
+	$(LD) $(LDFLAGS) boot.o kernel.o -o kernel.bin
 
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+iso:
+	mkdir -p iso/boot/grub
+	cp kernel.bin iso/boot/
+	cp grub.cfg iso/boot/grub/
+	grub-mkrescue -o myos.iso iso
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) $(INCLUDES) $(SRCS) -o $(TARGET) $(LDFLAGS)
-
-debug:
-	gdb ./$(TARGET)
-
-exe:
-	./$(TARGET)
+run:
+	qemu-system-x86_64 -cdrom myos.iso
 
 clean:
-	rm -rf $(BUILD_DIR)/*
-
-do: clean all exe
-
-dg: clean alldebug debug
+	rm -rf *.o iso kernel.bin myos.iso
 
 # === Makefile.linux ===
