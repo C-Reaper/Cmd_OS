@@ -1,44 +1,62 @@
 # === Makefile.linux ===
 
+# Compiler & Tools
 CC = x86_64-elf-gcc
 AS = nasm
 LD = x86_64-elf-ld
 
+# Compiler Flags
 CFLAGS = -ffreestanding -O2 -Wall -Wextra \
          -fno-builtin \
          -fno-stack-protector \
          -mno-red-zone \
          -mno-sse -mno-mmx -mno-sse2 \
          -fno-omit-frame-pointer \
-         -Ikernel/include
+         -Ikernel/include \
+         -Ikernel
 
+# Linker Flags
 LDFLAGS = -T linker.ld
 
+# Alle C-Quellen im Kernel-Ordner
 C_SOURCES = $(shell find kernel -name "*.c")
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
+# Assembly-Stubs
+ASM_SOURCES = kernel/arch/x64/idt_load.asm
+ASM_OBJECTS = $(ASM_SOURCES:.asm=.o)
+
+# Standard Target
 all: kernel.bin iso
 
-kernel.bin: boot.o $(C_OBJECTS)
-	$(LD) $(LDFLAGS) boot.o $(C_OBJECTS) -o kernel.bin
+# Kernel Binär
+kernel.bin: boot.o $(C_OBJECTS) $(ASM_OBJECTS)
+	$(LD) $(LDFLAGS) boot.o $(C_OBJECTS) $(ASM_OBJECTS) -o kernel.bin
 
-boot.o:
+# Bootloader
+boot.o: boot/boot.asm
 	$(AS) -f elf64 boot/boot.asm -o boot.o
 
+# C-Dateien kompilieren
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Assembly-Dateien kompilieren
+%.o: %.asm
+	$(AS) -f elf64 $< -o $@
+
+# ISO erstellen
 iso: kernel.bin
 	mkdir -p iso/boot/grub
 	cp kernel.bin iso/boot/
 	cp grub.cfg iso/boot/grub/
 	grub-mkrescue -o myos.iso iso
 
+# QEMU starten
 run: iso
-	qemu-system-x86_64 -cdrom myos.iso
-#qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom myos.iso
-#qemu-system-x86_64 -M pc -m 512 -cdrom myos.iso
+	qemu-system-x86_64 -machine pc -m 512 -cdrom myos.iso
 
+# Bereinigen
 clean:
 	find . -name "*.o" -delete
 	rm -rf iso kernel.bin myos.iso
